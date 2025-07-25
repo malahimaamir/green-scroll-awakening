@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Float, Text3D, Environment } from '@react-three/drei';
-import { useRef, useMemo, useState, useEffect } from 'react';
+import { useRef, useMemo, useState, useEffect, Component, ReactNode } from 'react';
 import * as THREE from 'three';
 
 function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
@@ -65,6 +65,29 @@ function ForestParticles() {
   );
 }
 
+// Error boundary to catch Canvas errors
+class ThreeErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.log('Three.js error caught:', error);
+  }
+
+  render() {
+    if ((this.state as any).hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
 // Fallback component when WebGL is not available
 function ForestFallback() {
   return (
@@ -85,17 +108,23 @@ function ForestFallback() {
   );
 }
 
-export default function Forest3D() {
-  const [webglSupported, setWebglSupported] = useState(true);
-  const [hasError, setHasError] = useState(false);
-  
-  useEffect(() => {
-    // Check for WebGL support
+// WebGL detection function
+function isWebGLSupported(): boolean {
+  try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    if (!gl) {
-      setWebglSupported(false);
-    }
+    return !!gl;
+  } catch (e) {
+    return false;
+  }
+}
+
+export default function Forest3D() {
+  const [webglSupported, setWebglSupported] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    // Check for WebGL support before rendering anything
+    setWebglSupported(isWebGLSupported());
   }, []);
 
   const treePositions: [number, number, number][] = [
@@ -111,68 +140,69 @@ export default function Forest3D() {
     [-5, -1, -3],
   ];
 
-  // Show fallback if WebGL not supported or error occurred
-  if (!webglSupported || hasError) {
+  // Show loading or fallback if WebGL check not complete or not supported
+  if (webglSupported === null) {
+    return <ForestFallback />;
+  }
+
+  if (!webglSupported) {
     return <ForestFallback />;
   }
 
   return (
-    <div className="h-full w-full">
-      <Canvas
-        camera={{ position: [0, 2, 8], fov: 60 }}
-        className="bg-gradient-to-b from-green-900/20 to-green-950/40"
-        onCreated={(state) => {
-          // Canvas created successfully
-        }}
-        onError={() => {
-          setHasError(true);
-        }}
-        gl={{
-          antialias: false,
-          alpha: true,
-          powerPreference: "default"
-        }}
-      >
-        <ambientLight intensity={0.4} />
-        <directionalLight 
-          position={[10, 10, 5]} 
-          intensity={1} 
-          color="#f4e4bc"
-          castShadow
-        />
-        <pointLight position={[-10, -10, -10]} color="#7fb069" intensity={0.3} />
-        
-        {/* Forest ground */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]}>
-          <planeGeometry args={[30, 30]} />
-          <meshStandardMaterial color="#1a2e05" />
-        </mesh>
-        
-        {/* Trees */}
-        {treePositions.map((position, index) => (
-          <Tree 
-            key={index} 
-            position={position} 
-            scale={0.8 + Math.random() * 0.4}
+    <ThreeErrorBoundary fallback={<ForestFallback />}>
+      <div className="h-full w-full">
+        <Canvas
+          camera={{ position: [0, 2, 8], fov: 60 }}
+          className="bg-gradient-to-b from-green-900/20 to-green-950/40"
+          gl={{
+            antialias: false,
+            alpha: true,
+            powerPreference: "default",
+            failIfMajorPerformanceCaveat: false
+          }}
+        >
+          <ambientLight intensity={0.4} />
+          <directionalLight 
+            position={[10, 10, 5]} 
+            intensity={1} 
+            color="#f4e4bc"
+            castShadow
           />
-        ))}
-        
-        {/* Floating particles */}
-        <ForestParticles />
-        
-        {/* Environment lighting */}
-        <Environment preset="forest" />
-        
-        {/* Subtle orbit controls */}
-        <OrbitControls 
-          enablePan={false} 
-          enableZoom={false}
-          autoRotate
-          autoRotateSpeed={0.5}
-          minPolarAngle={Math.PI / 3}
-          maxPolarAngle={Math.PI / 2}
-        />
-      </Canvas>
-    </div>
+          <pointLight position={[-10, -10, -10]} color="#7fb069" intensity={0.3} />
+          
+          {/* Forest ground */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]}>
+            <planeGeometry args={[30, 30]} />
+            <meshStandardMaterial color="#1a2e05" />
+          </mesh>
+          
+          {/* Trees */}
+          {treePositions.map((position, index) => (
+            <Tree 
+              key={index} 
+              position={position} 
+              scale={0.8 + Math.random() * 0.4}
+            />
+          ))}
+          
+          {/* Floating particles */}
+          <ForestParticles />
+          
+          {/* Environment lighting */}
+          <Environment preset="forest" />
+          
+          {/* Subtle orbit controls */}
+          <OrbitControls 
+            enablePan={false} 
+            enableZoom={false}
+            autoRotate
+            autoRotateSpeed={0.5}
+            minPolarAngle={Math.PI / 3}
+            maxPolarAngle={Math.PI / 2}
+          />
+        </Canvas>
+      </div>
+    </ThreeErrorBoundary>
   );
 }
