@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Float, Text3D, Environment } from '@react-three/drei';
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState, useEffect } from 'react';
 import * as THREE from 'three';
 
 function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
@@ -65,7 +65,39 @@ function ForestParticles() {
   );
 }
 
+// Fallback component when WebGL is not available
+function ForestFallback() {
+  return (
+    <div className="h-full w-full bg-gradient-to-b from-green-900/20 to-green-950/40 flex items-center justify-center relative overflow-hidden">
+      {/* Animated background pattern */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="w-full h-full bg-[radial-gradient(circle_at_50%_50%,hsl(var(--accent)/0.3),transparent_50%)]" />
+      </div>
+      
+      {/* Static tree silhouettes */}
+      <div className="relative z-10 text-center">
+        <div className="text-6xl mb-4 animate-pulse">🌲</div>
+        <p className="text-muted-foreground text-sm">
+          Enhanced 3D forest requires WebGL support
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Forest3D() {
+  const [webglSupported, setWebglSupported] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    // Check for WebGL support
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) {
+      setWebglSupported(false);
+    }
+  }, []);
+
   const treePositions: [number, number, number][] = [
     [-3, -1, -2],
     [2, -1, -3],
@@ -79,11 +111,27 @@ export default function Forest3D() {
     [-5, -1, -3],
   ];
 
+  // Show fallback if WebGL not supported or error occurred
+  if (!webglSupported || hasError) {
+    return <ForestFallback />;
+  }
+
   return (
     <div className="h-full w-full">
       <Canvas
         camera={{ position: [0, 2, 8], fov: 60 }}
         className="bg-gradient-to-b from-green-900/20 to-green-950/40"
+        onCreated={(state) => {
+          // Canvas created successfully
+        }}
+        onError={() => {
+          setHasError(true);
+        }}
+        gl={{
+          antialias: false,
+          alpha: true,
+          powerPreference: "default"
+        }}
       >
         <ambientLight intensity={0.4} />
         <directionalLight 
